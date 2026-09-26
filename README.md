@@ -47,18 +47,37 @@ MIDI 预览显示原始轨道数、可导入声部及音符统计，支持查看
 
 ## 开发与构建
 
-需要 Windows、Node.js 20+、pnpm，以及 Windows 自带的 .NET Framework 4 C# 编译器。项目使用 Electron、React、TypeScript；输入辅助进程源码位于 `helper/DeltaHarmonicaInput.cs`，使用普通用户态 Win32 `SendInput`。
+需要 Windows、Node.js 22、pnpm 10.26.2，以及 Windows 自带的 .NET Framework 4 C# 编译器。项目使用 Electron、React、TypeScript；输入辅助进程源码位于 `helper/DeltaHarmonicaInput.cs`，使用普通用户态 Win32 `SendInput`。
 
 ```powershell
-pnpm install
+pnpm install --frozen-lockfile
 pnpm helper:build
 pnpm test
 pnpm build
 pnpm dev
 pnpm package:win
+pnpm package:check
 ```
 
 如果 pnpm 阻止 Electron 安装脚本，可按其提示批准 Electron 构建脚本并重装。`pnpm package:win` 的结果在 `release/`。
+
+## 自动构建与测试版下载
+
+推送 `master` 后，GitHub Actions 自动在 Windows 2022 上安装锁定依赖、运行测试、重新编译输入辅助程序、生成 Windows x64 安装包，并核验程序文件。也可在 Actions 的「Windows build and nightly release」页面点击 Run workflow，选择 `master` 手动构建。
+
+- [最新测试版下载](https://github.com/LINK-URIBOH/DeltaHarmonicaStudio/releases/tag/nightly)：同一个预发布版本会随成功构建更新，包含安装包 `DeltaHarmonicaStudio-Setup-x64.exe` 和 `SHA256SUMS.txt`。
+- 发布说明包含程序版本、提交编号、UTC 构建时间和构建记录；`nightly` 标签指向对应提交。测试版不是正式版本，版本号仍取自 `package.json`。
+- 每次成功构建也上传独立的 Actions 产物，保留 30 天。旧构建会被新构建取消，过期提交不会发布；测试或构建失败不会替换上次成功的测试版。
+- 工作流使用 GitHub 提供的 `GITHUB_TOKEN`，无需配置额外密钥。构建仅有仓库读取权限，发布任务才有内容写入权限；仓库或组织策略须允许 Actions 创建和更新 Release。
+- 程序仍未进行代码签名，不包含自动更新功能。安装包的 SHA-256 可用 `Get-FileHash -Algorithm SHA256` 与校验文件对照。
+
+## 安装向导
+
+安装包提供欢迎页、安装目录选择及完成页，仅安装到当前 Windows 用户。默认目录为当前用户的程序目录；可选择其他可写目录。安装器不会主动请求管理员权限，请避免选择需要管理员权限的系统目录。
+
+在欢迎页或目录选择页点击「取消」即可退出，尚未开始复制程序文件。点击「安装」后按标准流程完成安装。重新安装会沿用已有目录，应用标识与曲库位置不变；卸载默认保留曲库数据。
+
+完整的自定义目录安装、启动与卸载检查仅在 CI 的隔离 Windows 运行器中执行，以避免影响本机安装。开发时可先构建，再运行 `powershell -NoProfile -File scripts/check-installer.ps1 -CancellationOnly`，验证目录选择和安装前取消。
 
 ## 设计限制
 

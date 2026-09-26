@@ -18,7 +18,8 @@ function verifyDirectory(relative) {
 verifyDirectory('dist');
 verifyDirectory('dist-electron');
 assert.ok(fs.readFileSync(path.join(root, 'helper', 'DeltaHarmonicaInput.exe')).equals(fs.readFileSync(path.join(root, 'release', 'win-unpacked', 'resources', 'helper', 'DeltaHarmonicaInput.exe'))));
-const installer = path.join(root, 'release', '口琴谱工作台 Setup 0.1.0.exe');
+const { installerPath } = require('./release-files.cjs');
+const installer = installerPath(root);
 assert.ok(fs.statSync(installer).size > 50 * 1024 * 1024);
 assert.equal(fs.readFileSync(installer).subarray(0, 2).toString(), 'MZ');
 process.stdout.write('安装包检查通过：程序文件、记谱字体、输入辅助程序与当前构建一致。\n');

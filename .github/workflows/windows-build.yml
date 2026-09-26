@@ -1,0 +1,85 @@
+name: Windows build and nightly release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/master'
+    runs-on: windows-2022
+    timeout-minutes: 30
+    concurrency:
+      group: windows-build-master
+      cancel-in-progress: true
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+          run_install: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test
+        run: pnpm test
+      - name: Compile input helper
+        run: pnpm helper:build
+      - name: Build x64 installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm package:win
+      - name: Verify packaged files
+        run: pnpm package:check
+      - name: Check installer in isolated runner
+        run: ./scripts/check-installer.ps1
+      - name: Prepare installer and checksum
+        run: pnpm release:prepare
+      - name: Save build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-${{ github.sha }}-${{ github.run_attempt }}
+          path: release/nightly/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  publish:
+    needs: build
+    runs-on: windows-2022
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    # Never interrupt asset replacement; newer builds wait, then check master.
+    concurrency:
+      group: nightly-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/download-artifact@v5
+        with:
+          name: windows-x64-${{ github.sha }}-${{ github.run_attempt }}
+          path: release/nightly
+      - name: Publish latest successful master build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-nightly.cjs
