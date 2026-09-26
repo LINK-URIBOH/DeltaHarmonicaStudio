@@ -37,8 +37,8 @@ app.whenReady().then(async () => {
     mouse('mouseMove', ruler); mouse('mouseDown', ruler); mouse('mouseUp', ruler); await pause(50);
     assert.equal(await run("document.querySelector('.timeline-start-label').textContent"), '起播 2 拍');
     await run("document.querySelector('.timeline-tools button:nth-child(4)').click()"); await pause(450);
-    const play = await run("({line:parseFloat(document.querySelector('.timeline-play-line').style.left),scroll:document.querySelector('.timeline-scroll').scrollLeft})");
-    assert.ok(play.line > 200); assert.equal(play.scroll, 0);
+    const play = await run("({line:parseFloat(document.querySelector('.timeline-play-line').style.left),scroll:document.querySelector('.timeline-scroll').scrollLeft,width:document.querySelector('.timeline-scroll').clientWidth})");
+    assert.ok(play.line > 200); assert.ok(Math.abs(play.scroll - Math.max(0, play.line - play.width / 3)) < 2);
     fs.writeFileSync(path.join(root, 'preview-canvas-play-smoke.png'), (await win.webContents.capturePage()).toPNG());
     await run("document.querySelector('.timeline-tools button:nth-child(4)').click()"); assert.equal(await run("!!document.querySelector('.timeline-play-line')"), false);
     await box();
@@ -51,6 +51,13 @@ app.whenReady().then(async () => {
     assert.ok(await run(`document.querySelector('.timeline-scroll').scrollTop > ${edge.before}`));
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' }); mouse('mouseUp', edge.end); await pause(80);
     assert.equal(await run("!!document.querySelector('.timeline-selection-box')"), false);
+    await click('去除开头空白'); await pause(100);
+    assert.equal(await run("document.querySelector('[data-note-id=a]').style.left"), '74px');
+    assert.equal(await run("document.querySelector('.timeline-start-label').textContent"), '起播 0 拍');
+    assert.equal(saves, 1);
+    await click('保存到曲库'); await pause(80);
+    assert.equal(library.scores[0].notes.find(note => note.id === 'a').beat, 0);
+    assert.ok(Math.abs(library.scores[0].tempoChanges[0].beat - 2.97) < 1e-8);
     win.setSize(1000, 1100); await pause(200);
     assert.ok(await run("document.querySelector('.timeline-tools').scrollWidth <= document.querySelector('.timeline-tools').clientWidth"));
     console.log('Canvas desktop checks passed: genuine long press/capture, group pitch drag, positioned audio and play line, Delete/undo, edge auto-scroll and Esc, narrow tools.');

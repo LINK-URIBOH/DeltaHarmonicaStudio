@@ -11,6 +11,7 @@
     "test:visual": "pnpm build && electron scripts/visual-smoke.cjs",
     "test:midi-visual": "pnpm build && electron scripts/midi-visual-smoke.cjs",
     "test:canvas-visual": "pnpm build && electron scripts/canvas-visual-smoke.cjs",
+    "test:playback-visual": "pnpm build && electron scripts/playback-visual-smoke.cjs",
     "package:win": "pnpm build && electron-builder --win nsis",
     "helper:build": "powershell -NoProfile -ExecutionPolicy Bypass -File helper/build.ps1"
   },

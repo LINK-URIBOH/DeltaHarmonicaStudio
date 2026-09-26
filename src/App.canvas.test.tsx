@@ -61,6 +61,49 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('canvas selection and local playback', () => {
+  it('follows only the timeline horizontally and synchronizes key and notation overlays across view switches', async () => {
+    const scroll = host.querySelector<HTMLElement>('.timeline-scroll')!;
+    Object.defineProperty(scroll, 'clientWidth', { configurable: true, value: 400 });
+    Object.defineProperty(scroll, 'scrollWidth', { configurable: true, value: 1200 });
+    scroll.scrollTop = 350;
+    await click(note('a')); await click(button('从此处试听'));
+    const beat = 1.43;
+    const expected = 72 + beat * 64 - 400 / 3;
+    expect(scroll.scrollLeft).toBeCloseTo(expected);
+    expect(scroll.scrollTop).toBe(350);
+    await act(async () => { scroll.scrollLeft = 800; scroll.dispatchEvent(new Event('scroll')); });
+    expect(scroll.scrollLeft).toBeCloseTo(expected);
+    const line = host.querySelector<HTMLElement>('.notation-play-line')!;
+    expect(line).not.toBeNull();
+    expect(host.querySelectorAll('.notation-play-line')).toHaveLength(1);
+    const svg = host.querySelector('.jianpu-system');
+    const stops = audio.stop.mock.calls.length;
+    await click(button('键位谱'));
+    expect(host.querySelector('.key-chip .key-play-line')).not.toBeNull();
+    expect(parseFloat(host.querySelector<HTMLElement>('.key-play-line')!.style.left)).toBeCloseTo(40);
+    expect(audio.stop.mock.calls.length).toBe(stops);
+    expect(host.querySelector('.jianpu-system')).toBe(svg);
+    await click(button('小节时间轴'));
+    expect(host.querySelector('.timeline-play-line')).not.toBeNull();
+    await click(button('停止试听'));
+    expect(host.querySelector('.notation-play-line')).toBeNull();
+    expect(save).not.toHaveBeenCalled(); expect(host.textContent).not.toContain('未保存');
+  });
+  it('trims the start in the draft, resets playback position and supports undo and manual save', async () => {
+    await click(note('b')); await click(button('从此处试听'));
+    await click(button('去除开头空白'));
+    expect(host.querySelector('.timeline-start-label')?.textContent).toBe('起播 0 拍');
+    expect(host.querySelector('.timeline-play-line')).toBeNull();
+    expect(note('a').style.left).toBe('74px');
+    expect(button('去除开头空白').disabled).toBe(true);
+    expect(save).not.toHaveBeenCalled(); expect(original.notes[0].beat).toBe(1.03);
+    await click(button('撤销')); expect(button('去除开头空白').disabled).toBe(false);
+    expect(host.textContent).not.toContain('未保存');
+    await click(button('重做')); await click(button('保存到曲库'));
+    const notes = save.mock.calls[0][0].scores[0].notes;
+    expect(notes[0]).toMatchObject({ id: 'a', beat: 0, duration: 1, pitch: 60 });
+    expect(notes[1].beat).toBeCloseTo(.97);
+  });
   it('requires a long press, cancels pre-threshold movement and selects only intersecting visible blocks', async () => {
     await pointer(canvas(), 'pointerdown', 100, 610); await wait(349);
     expect(host.querySelector('.timeline-selection-box')).toBeNull();

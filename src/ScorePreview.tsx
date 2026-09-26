@@ -4,6 +4,7 @@ import bravuraUrl from '@vexflow-fonts/bravura/bravura.woff2?url';
 import academicoUrl from '@vexflow-fonts/academico/academico.woff2?url';
 import { buildNotation, layoutNotation, notationDuration, type NotationEvent, type NotationSystem } from './core/notation';
 import type { Score } from './core/model';
+import { notationPlaybackX, type PlaybackMeasure } from './core/playbackPosition';
 
 const DEGREES = ['1', '♯1', '2', '♯2', '3', '4', '♯4', '5', '♯5', '6', '♯6', '7'];
 const NAMES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
@@ -17,8 +18,13 @@ function midiKey(pitch: number): string {
   return `${NAMES[safe % 12]}/${Math.floor(safe / 12) - 1}`;
 }
 
-function StaffSystem({ system, score }: { system: NotationSystem; score: Score }) {
+function ProgressLine({ x }: { x: number | null }) {
+  return x === null ? null : <div className="notation-play-line" aria-hidden="true" style={{ left: x }} />;
+}
+
+function StaffSystem({ system, score, playbackBeat }: { system: NotationSystem; score: Score; playbackBeat: number | null }) {
   const host = useRef<HTMLDivElement>(null);
+  const [layout, setLayout] = useState<{ system: NotationSystem; measures: PlaybackMeasure[] } | null>(null);
   useEffect(() => {
     const div = host.current;
     if (!div) return;
@@ -28,6 +34,7 @@ function StaffSystem({ system, score }: { system: NotationSystem; score: Score }
       renderer.resize(system.width, 205);
       const context = renderer.getContext();
       let x = 0;
+      const playback: PlaybackMeasure[] = [];
       const preceding = new Map<string, { note: StaveNote; x: number; y: number }>();
       const simultaneousRests: { x: number; code: string; dots: number }[] = [];
       const arcs: { start: number; end: number; y: number }[] = [];
@@ -49,6 +56,10 @@ function StaffSystem({ system, score }: { system: NotationSystem; score: Score }
         });
         if (notes.length) {
           Formatter.FormatAndDraw(context, stave, notes, { autoBeam: true, alignRests: true });
+          playback.push({ start: measure.start, end: measure.start + measure.duration, anchors: [
+            ...measure.slots.map((slot, index) => ({ beat: slot.start, x: notes[index].getAbsoluteX() })),
+            { beat: measure.start + measure.duration, x: x + width }
+          ] });
           measure.slots.forEach((slot, index) => {
             const note = notes[index];
             const noteX = note.getAbsoluteX();
@@ -94,11 +105,13 @@ function StaffSystem({ system, score }: { system: NotationSystem; score: Score }
           svg.appendChild(label);
         }
       }
+      setLayout({ system, measures: playback });
     } catch (error) {
+      setLayout(null);
       div.textContent = `五线谱预览暂时无法显示：${error instanceof Error ? error.message : String(error)}`;
     }
   }, [system, score.meter.numerator, score.meter.denominator]);
-  return <div className="notation-system staff-system" data-columns={system.columns} ref={host} style={{ width: system.width }} />;
+  return <div className="notation-system staff-system" data-columns={system.columns} style={{ width: system.width, height: 205 }}><div ref={host} /><ProgressLine x={layout?.system === system ? notationPlaybackX(layout.measures, playbackBeat) : null} /></div>;
 }
 
 function JianpuNote({ event, x }: { event: NotationEvent; x: number }) {
@@ -115,8 +128,9 @@ function JianpuNote({ event, x }: { event: NotationEvent; x: number }) {
   </g>;
 }
 
-function JianpuSystem({ system, score }: { system: NotationSystem; score: Score }) {
+function buildJianpuSystem(system: NotationSystem, score: Score) {
   let x = 0;
+  const playback: PlaybackMeasure[] = [];
   const positions: { event: NotationEvent; x: number; y: number }[] = [];
   const extraHeight = 55 * Math.max(0, ...system.measures.flatMap(({ measure }) => measure.slots.map(slot => slot.events.length - 1)));
   const groups = system.measures.map(({ measure, width }, index) => {
@@ -127,11 +141,16 @@ function JianpuSystem({ system, score }: { system: NotationSystem; score: Score 
     const weights = measure.slots.map(slot => Math.max(1, Math.min(4, slot.duration)));
     const total = weights.reduce((sum, weight) => sum + weight, 0);
     let offset = 0;
+    const anchors = measure.slots.map((slot, eventIndex) => {
+      const noteX = innerStart + (offset + .35) / Math.max(1, total) * usable;
+      offset += weights[eventIndex];
+      return { beat: slot.start, x: noteX };
+    });
+    playback.push({ start: measure.start, end: measure.start + measure.duration, anchors: [...anchors, { beat: measure.start + measure.duration, x: origin + width }] });
     return <g key={measure.index}>
       {index === 0 && <text x="8" y="76" className="jianpu-signature">1=C4　{score.meter.numerator}/{score.meter.denominator}</text>}
       {measure.slots.map((slot, eventIndex) => {
-        const noteX = innerStart + (offset + .35) / Math.max(1, total) * usable;
-        offset += weights[eventIndex];
+        const noteX = anchors[eventIndex].x;
         return <g key={slot.start} data-beat={slot.start}>{slot.events.map((event, chordIndex) => {
           positions.push({ event, x: noteX, y: 39 + chordIndex * 55 });
           return <g key={event.id} transform={`translate(0 ${chordIndex * 55})`}><JianpuNote event={event} x={noteX} /></g>;
@@ -150,13 +169,19 @@ function JianpuSystem({ system, score }: { system: NotationSystem; score: Score 
   }
   const contentEnd = system.measures.reduce((sum, item) => sum + item.width, 0);
   for (const [id, item] of previous) arcs.push({ id: `${id}-out`, start: item.x, end: contentEnd - 6, y: item.y });
-  return <svg className="notation-system jianpu-system" data-columns={system.columns} width={system.width} height={150 + extraHeight} viewBox={`0 0 ${system.width} ${150 + extraHeight}`} role="img" aria-label="简谱连续谱行">
+  const svg = <svg className="notation-system jianpu-system" data-columns={system.columns} width={system.width} height={150 + extraHeight} viewBox={`0 0 ${system.width} ${150 + extraHeight}`} role="img" aria-label="简谱连续谱行">
     {groups}
     {arcs.map(arc => <path key={arc.id} className="jianpu-tie" d={`M ${arc.start} ${arc.y} Q ${(arc.start + arc.end) / 2} ${arc.y - 24} ${arc.end} ${arc.y}`} fill="none" stroke="#385740" strokeWidth="1.5" />)}
   </svg>;
+  return { svg, playback, height: 150 + extraHeight };
 }
 
-export default function ScorePreview({ score }: { score: Score }) {
+function JianpuSystem({ system, score, playbackBeat }: { system: NotationSystem; score: Score; playbackBeat: number | null }) {
+  const layout = useMemo(() => buildJianpuSystem(system, score), [system, score.meter.numerator, score.meter.denominator]);
+  return <div className="jianpu-playback-system" style={{ width: system.width, height: layout.height }}>{layout.svg}<ProgressLine x={notationPlaybackX(layout.playback, playbackBeat)} /></div>;
+}
+
+export default function ScorePreview({ score, playbackBeat = null }: { score: Score; playbackBeat?: number | null }) {
   const [mode, setMode] = useState<'jianpu' | 'staff'>('jianpu');
   const [fontsReady, setFontsReady] = useState(false);
   const [fontError, setFontError] = useState('');
@@ -177,5 +202,5 @@ export default function ScorePreview({ score }: { score: Score }) {
     void loadNotationFonts().then(() => { if (active) setFontsReady(true); }).catch(error => { if (active) setFontError(error instanceof Error ? error.message : String(error)); });
     return () => { active = false; };
   }, [mode]);
-  return <div className="panel preview-panel"><div className="panel-heading"><div><span className="eyebrow">SCORE PREVIEW</span><h3>谱面预览</h3></div><div className="segmented"><button className={mode === 'jianpu' ? 'selected' : ''} onClick={() => setMode('jianpu')}>简谱</button><button className={mode === 'staff' ? 'selected' : ''} onClick={() => setMode('staff')}>五线谱</button></div></div><p className="preview-help">只读预览 · 小节对齐 · 预览吸附到四分之一拍，演奏时间保持原值</p><div className="notation-page" ref={container}>{mode === 'staff' && fontError ? <div className="notation-loading">五线谱字体加载失败：{fontError}</div> : mode === 'staff' && !fontsReady ? <div className="notation-loading">五线谱加载中…</div> : systems.map((system, index) => <div className="notation-line" key={`${mode}-${index}`}>{mode === 'staff' ? <StaffSystem system={system} score={score} /> : <JianpuSystem system={system} score={score} />}</div>)}</div></div>;
+  return <div className="panel preview-panel"><div className="panel-heading"><div><span className="eyebrow">SCORE PREVIEW</span><h3>谱面预览</h3></div><div className="segmented"><button className={mode === 'jianpu' ? 'selected' : ''} onClick={() => setMode('jianpu')}>简谱</button><button className={mode === 'staff' ? 'selected' : ''} onClick={() => setMode('staff')}>五线谱</button></div></div><p className="preview-help">只读预览 · 小节对齐 · 预览吸附到四分之一拍，演奏时间保持原值</p><div className="notation-page" ref={container}>{mode === 'staff' && fontError ? <div className="notation-loading">五线谱字体加载失败：{fontError}</div> : mode === 'staff' && !fontsReady ? <div className="notation-loading">五线谱加载中…</div> : systems.map((system, index) => <div className="notation-line" key={`${mode}-${index}`}>{mode === 'staff' ? <StaffSystem system={system} score={score} playbackBeat={playbackBeat} /> : <JianpuSystem system={system} score={score} playbackBeat={playbackBeat} />}</div>)}</div></div>;
 }

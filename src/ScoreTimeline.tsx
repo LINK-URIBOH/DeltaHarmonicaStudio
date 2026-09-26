@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import { pitchName } from './core/harmonica';
 import { endBeat, type Note, type Score } from './core/model';
+import { playbackScrollLeft } from './core/playbackPosition';
 import { DEFAULT_PX_PER_BEAT, MAX_PX_PER_BEAT, MIN_PX_PER_BEAT, TIMELINE_LEFT, TIMELINE_ROW as ROW, TIMELINE_TOP as TOP, draggedNote, groupPitchDelta, noteRect, notesInRect, snapBeat, timelinePitchBounds, timelineFocusPosition, zoomScrollLeft, type SelectionRect, type TimelineFocus } from './core/timeline';
 
 type Point = { x: number; y: number };
@@ -26,6 +27,7 @@ export default function ScoreTimeline({ score, selectedNoteIds, onSelect, onMult
   const frame = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef<() => void>(() => {});
   const { high, low } = timelinePitchBounds(score.notes, score.transpose);
   const visibleNotes = onlyOutOfRange ? score.notes.filter(note => outOfRangeIds.has(note.id)) : score.notes;
   const height = TOP + (high - low + 2) * ROW + 12;
@@ -34,6 +36,22 @@ export default function ScoreTimeline({ score, selectedNoteIds, onSelect, onMult
   const barCount = Math.ceil((width - TIMELINE_LEFT) / (barLength * pxPerBeat));
   const highlighted = box ? new Set(notesInRect(visibleNotes, box, score.transpose, high, pxPerBeat)) : selectedNoteIds;
   const draftById = new Map(draft.map(note => [note.id, note]));
+  followRef.current = () => {
+    const scroll = scrollRef.current;
+    if (!scroll || playbackBeat === null) return;
+    const target = playbackScrollLeft(playbackBeat, pxPerBeat, scroll.clientWidth, scroll.scrollWidth || width);
+    if (Math.abs(scroll.scrollLeft - target) > .5) scroll.scrollLeft = target;
+  };
+  useLayoutEffect(() => { followRef.current(); }, [playbackBeat, pxPerBeat, width]);
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    const follow = () => followRef.current();
+    const observer = new ResizeObserver(follow);
+    observer.observe(scroll);
+    scroll.addEventListener('scroll', follow);
+    return () => { observer.disconnect(); scroll.removeEventListener('scroll', follow); };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = Math.max(0, TOP + (high - 60 + 1) * ROW - 280);
@@ -54,7 +72,7 @@ export default function ScoreTimeline({ score, selectedNoteIds, onSelect, onMult
     if (!scroll || clamped === pxPerBeat) return;
     const target = zoomScrollLeft(pxPerBeat, clamped, scroll.scrollLeft, anchorX ?? scroll.clientWidth / 2);
     onZoom(clamped);
-    requestAnimationFrame(() => { scroll.scrollLeft = target; });
+    requestAnimationFrame(() => { if (playbackBeat === null) scroll.scrollLeft = target; else followRef.current(); });
   }
   useEffect(() => {
     const scroll = scrollRef.current;

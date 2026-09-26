@@ -1,0 +1,58 @@
+const { app, BrowserWindow, ipcMain } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+app.disableHardwareAcceleration();
+const root = path.resolve(__dirname, '..');
+const score = { id: 'playback', title: '同步播放进度检查', source: 'blank', tonicMidi: 60, bpm: 120, meter: { numerator: 4, denominator: 4 }, tempoChanges: [{ beat: 64, bpm: 90 }], transpose: 0,
+  notes: [{ id: 'first', beat: 1, duration: 1, pitch: 60 }, { id: 'rest', beat: 2, duration: 1, pitch: null }, { id: 'middle', beat: 8, duration: 4, pitch: 64 }, { id: 'late', beat: 64.3, duration: 12, pitch: 72 }, { id: 'chord', beat: 64.3, duration: 12, pitch: 67 }], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+let saves = 0;
+ipcMain.handle('library:get', () => ({ version: 1, scores: [score], hotkeys: {}, settings: { rootMidi: 60, stopShortcut: 'Ctrl+Alt+Shift+F12', outputMode: 'sendinput' } }));
+ipcMain.handle('library:save', () => { saves++; return true; });
+ipcMain.handle('window:confirm-close', () => true);
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+app.whenReady().then(async () => {
+  const win = new BrowserWindow({ show: false, width: 1500, height: 1100, webPreferences: { preload: path.join(root, 'dist-electron/preload.js'), contextIsolation: true, sandbox: true, offscreen: true, backgroundThrottling: false } });
+  const run = code => win.webContents.executeJavaScript(code, true);
+  const click = text => run(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`);
+  const followState = () => run("(() => {const s=document.querySelector('.timeline-scroll');return {left:s.scrollLeft,top:s.scrollTop,width:s.clientWidth,cursor:parseFloat(document.querySelector('.timeline-play-line').style.left),page:document.querySelector('.main-area').scrollTop};})()");
+  try {
+    await win.loadFile(path.join(root, 'dist/index.html')); await pause(400); await click('谱面编辑');
+    await run("document.querySelector('.score-workspace').scrollIntoView({block:'start'});document.querySelector('[data-note-id=late]').click();document.querySelector('.timeline-scroll').scrollTop=270");
+    const page = await run("document.querySelector('.main-area').scrollTop");
+    await click('从此处试听'); await pause(250);
+    let state = await followState(); assert.ok(state.left > 3000); assert.ok(Math.abs(state.cursor - state.left - state.width / 3) < 2); assert.ok(Math.abs(state.top - 270) < .5); assert.equal(state.page, page);
+    await run("document.querySelector('.timeline-scroll').scrollLeft=0"); await pause(80);
+    state = await followState(); assert.ok(state.left > 3000);
+    await run("document.querySelector('[aria-label=\"放大时间轴\"]').click()"); await pause(100);
+    state = await followState(); assert.ok(Math.abs(state.cursor - state.left - state.width / 3) < 2); assert.ok(Math.abs(state.top - 270) < .5);
+    fs.writeFileSync(path.join(root, 'preview-follow-smoke.png'), (await win.webContents.capturePage()).toPNG());
+    await click('键位谱'); await pause(100);
+    assert.equal(await run("document.querySelectorAll('.key-play-line').length"), 2);
+    const keyBefore = await run("parseFloat(document.querySelector('.key-play-line').style.left)"); await pause(150);
+    assert.ok(await run(`parseFloat(document.querySelector('.key-play-line').style.left)>${keyBefore}`));
+    await click('小节时间轴'); await pause(100);
+    state = await followState(); assert.ok(Math.abs(state.cursor - state.left - state.width / 3) < 2);
+    assert.equal(await run("document.querySelectorAll('.notation-play-line').length"), 1);
+    await run("document.querySelector('.notation-play-line').scrollIntoView({block:'center'});window.playbackSvg=document.querySelector('.notation-play-line').previousElementSibling");
+    const previewPage = await run("document.querySelector('.main-area').scrollTop"); await pause(150);
+    assert.equal(await run("document.querySelector('.main-area').scrollTop"), previewPage);
+    fs.writeFileSync(path.join(root, 'preview-progress-jianpu-smoke.png'), (await win.webContents.capturePage()).toPNG());
+    await click('五线谱'); await pause(450);
+    assert.equal(await run("document.querySelectorAll('.staff-system .notation-play-line').length"), 1);
+    await run("window.staffSvg=document.querySelector('.staff-system .notation-play-line').previousElementSibling.querySelector('svg');document.querySelector('.staff-system .notation-play-line').scrollIntoView({block:'center'})");
+    const staffPage = await run("document.querySelector('.main-area').scrollTop"); await pause(120);
+    assert.equal(await run("document.querySelector('.main-area').scrollTop"), staffPage);
+    assert.equal(await run("window.staffSvg===document.querySelector('.staff-system .notation-play-line').previousElementSibling.querySelector('svg')"), true);
+    fs.writeFileSync(path.join(root, 'preview-progress-staff-smoke.png'), (await win.webContents.capturePage()).toPNG());
+    win.setSize(1000, 1100); await pause(150);
+    state = await followState(); assert.ok(Math.abs(state.cursor - state.left - state.width / 3) < 2);
+    assert.equal(await run("document.querySelectorAll('.staff-system .notation-play-line').length"), 1);
+    await run("document.querySelector('.timeline-tools button:nth-child(4)').click()"); await pause(50);
+    assert.equal(await run("document.querySelectorAll('.timeline-play-line,.notation-play-line,.key-play-line').length"), 0);
+    const stopped = state.left; await pause(100); assert.ok(Math.abs(await run("document.querySelector('.timeline-scroll').scrollLeft") - stopped) < 2);
+    assert.equal(saves, 0); assert.equal(await run("!!document.querySelector('.unsaved-badge')"), false);
+    console.log('Playback desktop checks passed: exact follow, zoom/resize/manual-scroll recovery, fixed vertical/page position, polyphonic key progress, jianpu/staff sync, stable VexFlow SVG, stop cleanup.');
+    app.exit(0);
+  } catch (error) { console.error(error); app.exit(1); }
+});

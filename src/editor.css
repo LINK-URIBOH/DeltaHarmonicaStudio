@@ -77,6 +77,10 @@ html,body,#root{height:100%;overflow:hidden}
 .notation-line{display:block;min-width:0;border-bottom:1px solid #edf1ea;margin-bottom:7px}
 .notation-system{display:block;max-width:none}
 .notation-system svg{display:block;max-width:none}
+.staff-system,.jianpu-playback-system{position:relative}
+.notation-play-line{position:absolute;top:20px;bottom:20px;width:2px;background:#347fbc;pointer-events:none;z-index:2}
+.key-chip{position:relative;overflow:hidden}
+.key-play-line{position:absolute;top:0;bottom:0;width:2px;background:#347fbc;pointer-events:none}
 .jianpu-system{fill:#304d35;font-family:'Microsoft YaHei','Noto Sans SC',sans-serif}
 .jianpu-note>text:first-child{font-size:22px;font-weight:700}
 .jianpu-note line,.jianpu-note path{stroke:#304d35;stroke-width:1.6}
