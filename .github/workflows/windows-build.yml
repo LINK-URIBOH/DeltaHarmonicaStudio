@@ -44,6 +44,8 @@ jobs:
         run: pnpm package:win
       - name: Verify packaged files
         run: pnpm package:check
+      - name: Test installer record validation
+        run: ./scripts/test-installer-records.ps1
       - name: Check installer in isolated runner
         run: ./scripts/check-installer.ps1
       - name: Prepare installer and checksum

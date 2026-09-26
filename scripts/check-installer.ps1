@@ -68,14 +68,8 @@ function OwnedIds([int]$rootId) {
   }
   return $ids.ToArray()
 }
-function InstallationRecords {
-  foreach ($key in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKCU:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
-    Get-ItemProperty -Path $key -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq $product } | ForEach-Object {
-      $uninstallPath = [regex]::Match($_.UninstallString, '^"([^"]+)"').Groups[1].Value
-      [pscustomobject]@{ PSPath = $_.PSPath; InstallLocation = if ($_.InstallLocation) { $_.InstallLocation } else { Split-Path -Parent $uninstallPath }; UninstallString = $_.UninstallString }
-    }
-  }
-}
+. (Join-Path $PSScriptRoot 'installer-records.ps1')
+function InstallationRecords { Get-InstallerRecords $product }
 function FileFingerprint([string]$file) {
   if (Test-Path -LiteralPath $file -PathType Leaf) { return (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash }
   return 'missing'
@@ -150,7 +144,9 @@ try {
   if (-not (Test-Path -LiteralPath $appExe) -or -not (Test-Path -LiteralPath $helperExe)) { throw '自定义目录缺少程序或辅助程序。' }
   if ((FileFingerprint $helperExe) -ne (FileFingerprint (Join-Path $workspace 'helper/DeltaHarmonicaInput.exe'))) { throw '安装的辅助程序不匹配。' }
   $records = @(InstallationRecords)
-  if ($records.Count -ne 1 -or $records[0].PSPath -notlike '*HKEY_CURRENT_USER*' -or $records[0].InstallLocation.TrimEnd('\') -ne $installDir.TrimEnd('\')) { throw '安装范围或目录不正确。' }
+  Write-Output "预期安装目录：$installDir"
+  Write-Output "安装记录：$(ConvertTo-Json -InputObject $records -Depth 3 -Compress)"
+  Assert-InstallerRecords -Records $records -ExpectedDirectory $installDir
 
   if ($beforeLibrary -ne 'missing') { throw '隔离运行器已有曲库，拒绝覆盖。' }
   # Use the installer's normal app-data folder to actually test uninstall retention.
