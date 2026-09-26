@@ -23,6 +23,9 @@ public static class InstallerWindowCheck {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr hwnd, int id);
   [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern IntPtr GetParent(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
   public static string ClassName(IntPtr hwnd) { var s = new StringBuilder(256); GetClassName(hwnd,s,256); return s.ToString(); }
@@ -33,10 +36,26 @@ public static class InstallerWindowCheck {
   }
   public static IntPtr Edit(IntPtr hwnd) {
     IntPtr found=IntPtr.Zero;
-    EnumChildWindows(hwnd,(h,p)=>{if(ClassName(h)=="Edit") {found=h;return false;}return true;},IntPtr.Zero);
+    EnumChildWindows(hwnd,(h,p)=>{if(ClassName(h)=="Edit" && IsWindowVisible(h) && IsWindowEnabled(h)) {found=h;return false;}return true;},IntPtr.Zero);
     return found;
   }
-  public static void Click(IntPtr button) { if(button==IntPtr.Zero || !IsWindowEnabled(button)) throw new Exception("Installer button unavailable"); PostMessage(button,0xF5,IntPtr.Zero,IntPtr.Zero); }
+  public static string Describe(IntPtr hwnd) {
+    var lines = new List<string>();
+    Callback describe = (h,p)=>{
+      var text = new StringBuilder(512); GetWindowText(h,text,512);
+      lines.Add(String.Format("id={0} class={1} visible={2} enabled={3} text={4}", GetDlgCtrlID(h), ClassName(h), IsWindowVisible(h), IsWindowEnabled(h), text));
+      return true;
+    };
+    describe(hwnd,IntPtr.Zero); EnumChildWindows(hwnd,describe,IntPtr.Zero);
+    return String.Join(Environment.NewLine,lines);
+  }
+  public static void Click(IntPtr button) {
+    if(button==IntPtr.Zero || !IsWindowEnabled(button)) throw new Exception("Installer button unavailable");
+    // Notify the owning dialog directly: BM_CLICK can fail on inactive CI desktops.
+    // BN_CLICKED is zero, so wParam contains only the control ID.
+    if(!PostMessage(GetParent(button),0x111,new IntPtr(GetDlgCtrlID(button)),button))
+      throw new Exception("Installer button notification failed");
+  }
 }
 '@
 
@@ -94,14 +113,26 @@ try {
   if ($dialog -eq [IntPtr]::Zero) { throw '未出现安装向导窗口。' }
   # Only move off the welcome page. Never click the install button.
   [InstallerWindowCheck]::Click([InstallerWindowCheck]::GetDlgItem($dialog,1))
-  Start-Sleep -Milliseconds 400
-  if ([InstallerWindowCheck]::Edit($dialog) -eq [IntPtr]::Zero) { throw '未出现可编辑的安装目录。' }
-  [InstallerWindowCheck]::Click([InstallerWindowCheck]::GetDlgItem($dialog,2))
-  Start-Sleep -Milliseconds 300
-  foreach ($window in [InstallerWindowCheck]::Windows(@(OwnedIds $cancelProcess.Id))) {
-    $yes = [InstallerWindowCheck]::GetDlgItem($window,6)
-    if ($yes -ne [IntPtr]::Zero) { [InstallerWindowCheck]::Click($yes) }
+  $deadline = [DateTime]::UtcNow.AddSeconds(30)
+  while ([InstallerWindowCheck]::Edit($dialog) -eq [IntPtr]::Zero -and [DateTime]::UtcNow -lt $deadline) {
+    $cancelProcess.Refresh()
+    if ($cancelProcess.HasExited) { throw "安装向导提前退出：$($cancelProcess.ExitCode)" }
+    Start-Sleep -Milliseconds 150
   }
+  if ([InstallerWindowCheck]::Edit($dialog) -eq [IntPtr]::Zero) {
+    Write-Output ([InstallerWindowCheck]::Describe($dialog))
+    throw '等待 30 秒后仍未出现可编辑的安装目录。'
+  }
+  [InstallerWindowCheck]::Click([InstallerWindowCheck]::GetDlgItem($dialog,2))
+  $deadline = [DateTime]::UtcNow.AddSeconds(20)
+  do {
+    foreach ($window in [InstallerWindowCheck]::Windows(@(OwnedIds $cancelProcess.Id))) {
+      $yes = [InstallerWindowCheck]::GetDlgItem($window,6)
+      if ($yes -ne [IntPtr]::Zero -and [InstallerWindowCheck]::IsWindowEnabled($yes)) { [InstallerWindowCheck]::Click($yes) }
+    }
+    Start-Sleep -Milliseconds 150
+    $cancelProcess.Refresh()
+  } while (-not $cancelProcess.HasExited -and [DateTime]::UtcNow -lt $deadline)
   WaitExit $cancelProcess
   if ((@(InstallationRecords) | ConvertTo-Json -Compress) -ne $beforeRecords) { throw '取消后安装记录发生变化。' }
   for ($index = 0; $index -lt $links.Count; $index++) { if ((FileFingerprint $links[$index]) -ne $beforeLinks[$index]) { throw '取消后快捷方式发生变化。' } }
