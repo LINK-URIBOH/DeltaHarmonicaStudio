@@ -1,0 +1,65 @@
+{
+  "name": "delta-harmonica-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows desktop harmonica score editor and player",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "pnpm build && electron .",
+    "build": "tsc -p tsconfig.app.json && tsc -p tsconfig.electron.json && vite build --configLoader runner",
+    "test": "vitest run --configLoader runner",
+    "test:visual": "pnpm build && electron scripts/visual-smoke.cjs",
+    "test:midi-visual": "pnpm build && electron scripts/midi-visual-smoke.cjs",
+    "test:canvas-visual": "pnpm build && electron scripts/canvas-visual-smoke.cjs",
+    "package:win": "pnpm build && electron-builder --win nsis",
+    "helper:build": "powershell -NoProfile -ExecutionPolicy Bypass -File helper/build.ps1"
+  },
+  "dependencies": {
+    "@tonejs/midi": "^2.0.28",
+    "@vexflow-fonts/academico": "^1.0.1",
+    "@vexflow-fonts/bravura": "^1.0.2",
+    "fflate": "^0.8.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "vexflow": "5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.1",
+    "@types/react-dom": "^19.1.1",
+    "@vitejs/plugin-react": "^5.0.2",
+    "concurrently": "^9.2.1",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0",
+    "jsdom": "26.1.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3",
+    "vitest": "^3.2.4",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "com.local.deltaharmonicastudio",
+    "productName": "口琴谱工作台",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "helper/DeltaHarmonicaInput.exe",
+        "to": "helper/DeltaHarmonicaInput.exe"
+      }
+    ],
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
