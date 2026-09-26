@@ -169,12 +169,29 @@ try {
   [InstallerWindowCheck]::PostMessage($appWindows[0],0x10,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
   WaitExit $appProcess 10000
   $uninstaller = Join-Path $installDir "Uninstall $product.exe"
-  $uninstallProcess = Start-Process -FilePath $uninstaller -ArgumentList @('/S','/currentuser') -WindowStyle Hidden -PassThru
+  # NSIS normally launches a temporary copy and exits before uninstall finishes.
+  # Make that copy explicitly, then use _?= (last and unquoted, even with spaces)
+  # to wait for the real uninstaller and obtain its exit code. Running outside
+  # the installation directory also lets it remove the original uninstaller.
+  $checkUninstaller = Join-Path $testRoot 'check-uninstall.exe'
+  Copy-Item -LiteralPath $uninstaller -Destination $checkUninstaller
+  $uninstallProcess = Start-Process -FilePath $checkUninstaller -ArgumentList @('/S','/currentuser',"_?=$installDir") -WindowStyle Hidden -PassThru
   $started.Add($uninstallProcess)
   WaitExit $uninstallProcess
+  if ($uninstallProcess.ExitCode -ne 0) { throw "卸载失败：$($uninstallProcess.ExitCode)" }
   $deadline = [DateTime]::UtcNow.AddSeconds(15)
-  while ((Test-Path -LiteralPath $appExe) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 250 }
-  if ((Test-Path -LiteralPath $appExe) -or @(InstallationRecords).Count -gt 0) { throw '卸载后仍有程序或卸载记录。' }
+  do {
+    $appRemains = Test-Path -LiteralPath $appExe
+    $uninstallerRemains = Test-Path -LiteralPath $uninstaller
+    $remainingRecords = @(InstallationRecords)
+    if (-not $appRemains -and -not $uninstallerRemains -and $remainingRecords.Count -eq 0) { break }
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $deadline)
+  if ($appRemains -or $uninstallerRemains -or $remainingRecords.Count -gt 0) {
+    Write-Output "卸载退出码：$($uninstallProcess.ExitCode)；程序残留：$appRemains；卸载器残留：$uninstallerRemains"
+    Write-Output "残留安装记录：$(ConvertTo-Json -InputObject $remainingRecords -Depth 3 -Compress)"
+    throw '卸载后仍有程序或卸载记录。'
+  }
   for ($index = 0; $index -lt $links.Count; $index++) { if ((FileFingerprint $links[$index]) -ne $beforeLinks[$index]) { throw '卸载后仍有新增快捷方式。' } }
   if (-not (Test-Path -LiteralPath $fixtureFile) -or [System.IO.File]::ReadAllText($fixtureFile) -ne $fixture) { throw '用户数据未保留。' }
   Write-Output '隔离安装检查通过：自定义目录、当前用户安装、程序启动、辅助程序一致、卸载及用户数据保留。'
