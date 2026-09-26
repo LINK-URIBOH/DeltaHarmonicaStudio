@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, shell } from 'electron';
+import { guideSourceUrl } from './guideSources';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -195,6 +196,11 @@ app.whenReady().then(() => {
     closeApproved = true;
     mainWindow?.close();
     return true;
+  });
+  ipcMain.handle('guide:open-source', async (_event, sourceId: unknown) => {
+    const url = guideSourceUrl(sourceId);
+    if (!url) throw new Error('不支持的教程资料');
+    await shell.openExternal(url);
   });
   ipcMain.handle('library:get', () => library);
   ipcMain.handle('library:save', (_event, value: unknown) => {

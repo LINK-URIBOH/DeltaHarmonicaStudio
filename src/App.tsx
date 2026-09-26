@@ -8,6 +8,7 @@ import { pageHtml, textScore } from './core/exporters';
 import ScoreTimeline from './ScoreTimeline';
 import ScorePreview from './ScorePreview';
 import MidiImportDialog from './MidiImportDialog';
+import MusicGuide from './MusicGuide';
 import { auditionBeat, MidiAudition } from './core/midiAudition';
 import { leadingBlankBeats, trimLeadingBlank } from './core/trim';
 import { eventPlaybackFraction } from './core/playbackPosition';
@@ -518,7 +519,7 @@ export default function App() {
 
         {page === 'export' && <>{selected ? <><div className="export-intro panel"><div><span className="eyebrow">EXPORT CENTER</span><h2>{selected.title}</h2><p>当前版本保留 {selected.notes.length} 个事件、{selected.bpm} BPM、{selected.meter.numerator}/{selected.meter.denominator} 拍。导出前请检查超出音域的提示。</p></div><FileMusic size={65} /></div><div className="export-grid"><ExportCard icon={Save} title="项目文件" ext=".dfhproj" description="保留全部音符、曲速、拍号与移调，日后可重新导入编辑。" action={() => void exportResult('project')} /><ExportCard icon={ListMusic} title="文本键位谱" ext=".txt" description="逐音列出起点、音长、毫秒时间、按键和鼠标修饰。" action={() => void exportResult('text')} /><ExportCard icon={FileMusic} title="打印乐谱" ext=".pdf" description="A4 版式，包含乐谱信息和完整按键清单。" action={() => void exportResult('pdf')} /><ExportCard icon={ArrowDownToLine} title="谱面图片" ext=".png" description="清晰的本地图片，便于查看或分享。" action={() => void exportResult('png')} /></div></> : <MissingScore onLibrary={() => setPage('library')} />}</>}
 
-        {page === 'guide' && <Guide />}
+        {page === 'guide' && <MusicGuide />}
 
         {page === 'settings' && <div className="settings-layout"><div className="panel settings-card"><span className="eyebrow">HOTKEY CONTROL</span><h3>快捷键和停止</h3><p>为每首谱在曲库卡片中绑定快捷键。启动演奏准备后，快捷键在其他窗口也会响应。</p><label>紧急停止快捷键<input className="hotkey-input wide" readOnly aria-label="设置紧急停止快捷键" title="点击后按 F1–F24 或含 Ctrl、Alt、Shift 的组合键" value={library.settings.stopShortcut} onFocus={() => void prepareHotkeyEdit()} onKeyDown={event => captureHotkey(event)} /></label><div className="hint">使用标准模拟输入。可单独使用 F1–F24，或使用 Ctrl、Alt、Shift 加字母、数字、F 键。若系统提示停止键被占用，请在这里换一个键。</div></div><div className="panel settings-card wide-card"><span className="eyebrow">PLAYBACK GUARDRAIL</span><h3>游戏内自动演奏</h3><p>请先在游戏中打开口琴界面，再启动演奏准备并切回该窗口。按曲目快捷键后有 3 秒倒计时；切出窗口、停止或程序失联时会结束演奏并请求释放按键。</p><label className="check-line"><input type="checkbox" checked={understood} onChange={event => setUnderstood(event.target.checked)} /><span>我理解自动输入违反游戏现行禁用规则，可能导致封号；程序无法保证 ACE 不会检测。</span></label><div className="settings-actions"><button className={`primary-button ${armed ? 'stop-button' : ''}`} onClick={() => void toggleArm()}>{armed ? <Pause size={17} /> : <CirclePlay size={17} />}{armed ? '关闭演奏准备' : '启用演奏准备'}</button><button className="subtle-button" onClick={() => void window.studio.stop()}><Pause size={16} /> 立即停止</button></div></div></div>}
       </div>
@@ -537,8 +538,3 @@ function MissingScore({ onLibrary }: { onLibrary: () => void }) {
 function ExportCard({ icon: Icon, title, ext, description, action }: { icon: typeof Save; title: string; ext: string; description: string; action: () => void }) {
   return <article className="export-card panel"><div className="export-icon"><Icon size={23} /></div><div><span className="eyebrow">{ext.toUpperCase()}</span><h3>{title}</h3><p>{description}</p></div><button className="subtle-button" onClick={action}><ArrowDownToLine size={16} /> 导出文件</button></article>;
 }
-
-function Guide() {
-  return <div className="guide-layout"><div className="guide-lead panel"><span className="eyebrow">MUSIC THEORY / START HERE</span><h2>看懂一首谱，再把它变成八个键。</h2><p>这份说明按工作台的简谱输入规则编写。输入谱面后，转换页会自动找出口琴按法。</p></div><div className="guide-grid"><article className="panel guide-card"><span className="step">01 / 简谱与调名</span><h3>默认 1 = C4</h3><p>口琴的 1 对应 C4。输入简谱时，默认调名也是 C4；若导入其他调的乐谱，可在输入时指定其主音。</p><div className="example">1=C4　 1:1 2:1 3:1 4:1</div></article><article className="panel guide-card"><span className="step">02 / 音高记号</span><h3>高低八度与升降音</h3><p><code>^1</code> 是高八度的 1，<code>_1</code> 是低八度的 1；<code>#3</code> 比 3 高半音，<code>b3</code> 比 3 低半音。游戏口琴的中键固定升半音，转换器会寻找等音按法。</p><div className="example">_5:1　 5:1　 #5:1　 ^5:1</div></article><article className="panel guide-card"><span className="step">03 / 节奏与休止</span><h3>冒号后写音长</h3><p><code>1:1</code> 持续 1 拍，<code>2:0.5</code> 持续半拍，<code>0:1</code> 休止 1 拍。BPM=120 时，一拍约 0.5 秒；4/4 表示每小节 4 个四分音符拍。竖线仅便于阅读。</p><div className="example">1:1 2:0.5 3:0.5 0:1 | 5:1</div></article><article className="panel guide-card"><span className="step">04 / 五线谱与导入</span><h3>音符位置变成绝对音高</h3><p>五线谱由谱号、线间位置、调号、临时升降号和时值决定音高与节奏。高音谱号第二线为 G4，低音谱号第四线为 F3。请从制谱软件导出 MusicXML/MXL；导入时先选声部，再处理和弦。</p><div className="example">高音谱号 · E4 F4 G4 A4 → MIDI 64 65 67 69</div></article></div></div>;
-}
-

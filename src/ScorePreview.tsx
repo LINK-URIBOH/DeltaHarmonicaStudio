@@ -1,18 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Accidental, Dot, Font, Formatter, Renderer, Stave, StaveNote, VexFlow } from 'vexflow';
-import bravuraUrl from '@vexflow-fonts/bravura/bravura.woff2?url';
-import academicoUrl from '@vexflow-fonts/academico/academico.woff2?url';
+import { Accidental, Dot, Formatter, Renderer, Stave, StaveNote } from 'vexflow/core';
+import { loadNotationFonts } from './notationFonts';
 import { buildNotation, layoutNotation, notationDuration, type NotationEvent, type NotationSystem } from './core/notation';
 import type { Score } from './core/model';
 import { notationPlaybackX, type PlaybackMeasure } from './core/playbackPosition';
 
 const DEGREES = ['1', '♯1', '2', '♯2', '3', '4', '♯4', '5', '♯5', '6', '♯6', '7'];
 const NAMES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
-let fontPromise: Promise<void> | null = null;
-function loadNotationFonts(): Promise<void> {
-  if (!fontPromise) fontPromise = Promise.all([Font.load('Bravura', bravuraUrl), Font.load('Academico', academicoUrl)]).then(() => { VexFlow.setFonts('Bravura', 'Academico'); });
-  return fontPromise;
-}
 function midiKey(pitch: number): string {
   const safe = Math.max(0, Math.min(127, pitch));
   return `${NAMES[safe % 12]}/${Math.floor(safe / 12) - 1}`;

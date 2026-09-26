@@ -53,6 +53,16 @@ afterEach(async () => {
 });
 
 describe('manual score saving', () => {
+  it('asks about the editor draft before opening the reading guide', async () => {
+    await click(button('加音符'));
+    await click(button('乐理入门'));
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(host.querySelector('.music-guide')).toBeNull();
+    await click(button('取消', host.querySelector('[role="dialog"]')!));
+    expect(host.querySelector('.timeline-note')).not.toBeNull();
+    expect(host.textContent).toContain('未保存');
+    expect(saveLibrary).not.toHaveBeenCalled();
+  });
   it('zooms the timeline with Ctrl and wheel and exposes both resize edges', async () => {
     await click(button('加音符'));
     const scroll = host.querySelector('.timeline-scroll')!;

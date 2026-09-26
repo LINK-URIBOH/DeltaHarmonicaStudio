@@ -3,6 +3,7 @@ import type { Library, Score } from './core/model';
 declare global {
   interface Window {
     studio: {
+      openGuideSource(sourceId: 'staff' | 'jianpu'): Promise<void>;
       getLibrary(): Promise<Library>;
       saveLibrary(data: Library): Promise<boolean>;
       arm(value: boolean): Promise<boolean>;

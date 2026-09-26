@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('studio', {
+  openGuideSource: (sourceId: string) => ipcRenderer.invoke('guide:open-source', sourceId),
   getLibrary: () => ipcRenderer.invoke('library:get'),
   saveLibrary: (data: unknown) => ipcRenderer.invoke('library:save', data),
   arm: (value: boolean) => ipcRenderer.invoke('playback:arm', value),
