@@ -3,7 +3,12 @@
   return [IO.Path]::GetFullPath($Path.Replace('/', '\')).TrimEnd('\')
 }
 
-function Get-InstallerRecords([string]$ProductName) {
+function Test-InstallerIdentity([string]$KeyName, [string]$DisplayName, [string]$ProductName, [string]$UninstallKey) {
+  if (-not [string]::IsNullOrWhiteSpace($UninstallKey)) { return $KeyName -eq $UninstallKey }
+  return $DisplayName -eq $ProductName
+}
+
+function Get-InstallerRecords([string]$ProductName, [string]$UninstallKey) {
   $subPath = 'Software\Microsoft\Windows\CurrentVersion\Uninstall'
   $seen = @{}
   foreach ($hive in @([Microsoft.Win32.RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryHive]::LocalMachine)) {
@@ -17,7 +22,8 @@ function Get-InstallerRecords([string]$ProductName) {
             $entry = $uninstall.OpenSubKey($name)
             if ($null -eq $entry) { continue }
             try {
-              if ($entry.GetValue('DisplayName') -ne $ProductName) { continue }
+              $displayName = [string]$entry.GetValue('DisplayName')
+              if (-not (Test-InstallerIdentity -KeyName $name -DisplayName $displayName -ProductName $ProductName -UninstallKey $UninstallKey)) { continue }
               $command = [string]$entry.GetValue('UninstallString')
               $match = [regex]::Match($command, '^\s*"([^"]+)"')
               $location = [string]$entry.GetValue('InstallLocation')
@@ -30,6 +36,7 @@ function Get-InstallerRecords([string]$ProductName) {
               if ($seen.ContainsKey($identity)) { continue }
               $seen[$identity] = $true
               [pscustomobject]@{
+                DisplayName = $displayName
                 Hive = $hive.ToString()
                 View = $view.ToString()
                 PSPath = $entry.Name

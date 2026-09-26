@@ -20,3 +20,15 @@ MustFail -Records @(Record -Hive 'LocalMachine') -Message '*安装范围不正�
 MustFail -Records @(Record -Location ($expected + '-other')) -Message '*安装目录不正确*'
 MustFail -Records @(Record -Location '') -Message '*安装目录为空*'
 Write-Output '安装记录校验通过：规范路径、空记录、重复记录、错误安装范围及错误目录。'
+
+# Reproduce electron-builder's default DisplayName, which includes a version.
+$identity = 'test-stable-app-guid'
+foreach ($display in @('口琴谱工作台', '口琴谱工作台 0.1.0', '口琴谱工作台 0.2.0-beta.1', '自定义卸载名称')) {
+  if (-not (Test-InstallerIdentity -KeyName $identity -DisplayName $display -ProductName '口琴谱工作台' -UninstallKey $identity)) {
+    throw "未识别固定注册表标识：$display"
+  }
+}
+if (Test-InstallerIdentity -KeyName 'different-app-guid' -DisplayName '口琴谱工作台' -ProductName '口琴谱工作台' -UninstallKey $identity) {
+  throw '错误识别同名的其他应用。'
+}
+Write-Output '安装标识校验通过：带版本号、预发布版本、自定义名称及同名其他应用。'
