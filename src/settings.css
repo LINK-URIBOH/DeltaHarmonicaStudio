@@ -1,0 +1,39 @@
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+.settings-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 32px;
+  padding: 28px;
+}
+.settings-description, .settings-controls { min-width: 0; }
+.settings-description h3 { margin: 9px 0 12px; }
+.settings-description p {
+  font-size: 13px;
+  line-height: 1.85;
+  margin: 0;
+  max-width: 560px;
+}
+.settings-controls {
+  border-left: 1px solid #e5ecdf;
+  padding-left: 32px;
+}
+.settings-controls label { margin: 0; max-width: none; }
+.settings-controls .hotkey-input.wide {
+  width: 100%;
+  max-width: 360px;
+  min-height: 42px;
+}
+.settings-controls .hint { margin-top: 10px; line-height: 1.8; }
+.settings-controls .check-line { line-height: 1.8; }
+.settings-controls .check-line input { margin-top: 3px; }
+.settings-actions { gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+@media (max-width: 1150px) {
+  .settings-card { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 24px; }
+  .settings-description p { max-width: none; }
+  .settings-controls { border-left: 0; border-top: 1px solid #e5ecdf; padding-left: 0; padding-top: 20px; }
+}

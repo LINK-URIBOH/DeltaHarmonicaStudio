@@ -521,7 +521,16 @@ export default function App() {
 
         {page === 'guide' && <MusicGuide />}
 
-        {page === 'settings' && <div className="settings-layout"><div className="panel settings-card"><span className="eyebrow">HOTKEY CONTROL</span><h3>快捷键和停止</h3><p>为每首谱在曲库卡片中绑定快捷键。启动演奏准备后，快捷键在其他窗口也会响应。</p><label>紧急停止快捷键<input className="hotkey-input wide" readOnly aria-label="设置紧急停止快捷键" title="点击后按 F1–F24 或含 Ctrl、Alt、Shift 的组合键" value={library.settings.stopShortcut} onFocus={() => void prepareHotkeyEdit()} onKeyDown={event => captureHotkey(event)} /></label><div className="hint">使用标准模拟输入。可单独使用 F1–F24，或使用 Ctrl、Alt、Shift 加字母、数字、F 键。若系统提示停止键被占用，请在这里换一个键。</div></div><div className="panel settings-card wide-card"><span className="eyebrow">PLAYBACK GUARDRAIL</span><h3>游戏内自动演奏</h3><p>请先在游戏中打开口琴界面，再启动演奏准备并切回该窗口。按曲目快捷键后有 3 秒倒计时；切出窗口、停止或程序失联时会结束演奏并请求释放按键。</p><label className="check-line"><input type="checkbox" checked={understood} onChange={event => setUnderstood(event.target.checked)} /><span>我理解自动输入违反游戏现行禁用规则，可能导致封号；程序无法保证 ACE 不会检测。</span></label><div className="settings-actions"><button className={`primary-button ${armed ? 'stop-button' : ''}`} onClick={() => void toggleArm()}>{armed ? <Pause size={17} /> : <CirclePlay size={17} />}{armed ? '关闭演奏准备' : '启用演奏准备'}</button><button className="subtle-button" onClick={() => void window.studio.stop()}><Pause size={16} /> 立即停止</button></div></div></div>}
+        {page === 'settings' && <div className="settings-layout">
+          <section className="panel settings-card" aria-labelledby="settings-hotkey-title">
+            <div className="settings-description"><span className="eyebrow">HOTKEY CONTROL</span><h3 id="settings-hotkey-title">快捷键和停止</h3><p>为每首谱在曲库卡片中绑定快捷键。启动演奏准备后，快捷键在其他窗口也会响应。</p></div>
+            <div className="settings-controls"><label>紧急停止快捷键<input className="hotkey-input wide" readOnly aria-label="设置紧急停止快捷键" title="点击后按 F1–F24 或含 Ctrl、Alt、Shift 的组合键" value={library.settings.stopShortcut} onFocus={() => void prepareHotkeyEdit()} onKeyDown={event => captureHotkey(event)} /></label><div className="hint">使用标准模拟输入。可单独使用 F1–F24，或使用 Ctrl、Alt、Shift 加字母、数字、F 键。若系统提示停止键被占用，请在这里换一个键。</div></div>
+          </section>
+          <section className="panel settings-card" aria-labelledby="settings-playback-title">
+            <div className="settings-description"><span className="eyebrow">PLAYBACK GUARDRAIL</span><h3 id="settings-playback-title">游戏内自动演奏</h3><p>请先在游戏中打开口琴界面，再启动演奏准备并切回该窗口。按曲目快捷键后有 3 秒倒计时；切出窗口、停止或程序失联时会结束演奏并请求释放按键。</p></div>
+            <div className="settings-controls"><label className="check-line"><input type="checkbox" checked={understood} onChange={event => setUnderstood(event.target.checked)} /><span>我理解自动输入违反游戏现行禁用规则，可能导致封号；程序无法保证 ACE 不会检测。</span></label><div className="settings-actions"><button className={`primary-button ${armed ? 'stop-button' : ''}`} onClick={() => void toggleArm()}>{armed ? <Pause size={17} /> : <CirclePlay size={17} />}{armed ? '关闭演奏准备' : '启用演奏准备'}</button><button className="subtle-button" onClick={() => void window.studio.stop()}><Pause size={16} /> 立即停止</button></div></div>
+          </section>
+        </div>}
       </div>
     </main>
 
